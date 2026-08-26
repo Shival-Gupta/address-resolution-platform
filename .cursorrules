@@ -1,0 +1,132 @@
+# .cursorrules — IDE-Level Guardrails for Address Resolution Platform
+
+## PROJECT IDENTITY
+This is an enterprise production system: GIS Address Base Premium with SAP S/4HANA integration.
+Treat every file as production code. No demo shortcuts. No placeholder implementations.
+
+## MANDATORY READING ORDER
+Before touching any file, read these in order:
+1. CONTEXT.md       — domain rules and business logic
+2. architecture.md  — schemas, API routes, state flow
+3. CLAUDE.md        — hard architectural constraints
+4. CONTRIBUTING.md  — coding standards
+
+## LANGUAGE & FRAMEWORK
+- Python 3.11+ only
+- `from __future__ import annotations` at top of every .py file
+- Pydantic V2: use `model_validate()`, `model_dump()` — NEVER `.dict()`, `parse_obj()`, `.json()`
+- FastAPI for web layer with `lifespan` context management
+- `httpx.AsyncClient` for all HTTP — NEVER `requests`
+- `asyncio` for all I/O — NEVER blocking calls in async functions
+- DuckDB for search index — NEVER raw f-string SQL (always parameterized)
+
+## HARD ARCHITECTURAL INVARIANTS
+1. The 4-Tier cascade (T0 → T1 → T2 → T3) MUST NOT be bypassed.
+   Never call the LLM (T3) directly for a search query.
+
+2. In semantic.py, ALWAYS filter by `premise_number` and `flat_no` as SQL WHERE
+   clauses BEFORE computing cosine similarity.
+   Reason: dense embedding models are number-blind (can't distinguish 7A from 7B).
+
+3. In llm_fallback.py, ALWAYS implement a circuit breaker.
+   If Gemini/OpenAI fails, return best T1/T2 result with `confidence_degraded=True`.
+   NEVER return HTTP 500 to caller due to LLM unavailability.
+
+4. NEVER use module-level global variables for DuckDB connection or AI clients.
+   Use FastAPI `lifespan` + `Depends()` for dependency injection.
+
+5. NEVER hardcode confidence thresholds (0.92, 0.88, etc.) in engine files.
+   Always read from `settings.TIER1_CONFIDENCE_THRESHOLD` etc.
+
+6. NEVER put business logic in `api/v1/*.py` routes.
+   Routes call engines only. Logic lives in `engines/`.
+
+7. NEVER import from `engines/` or `api/` in `models/`.
+   Models are pure Pydantic schemas — zero logic.
+
+## CODE QUALITY
+- Type hints: MANDATORY on every function argument and return type
+- No bare `except:` — always `except SpecificError as e:`
+- No `print()` — use `logging.getLogger(__name__)`
+- No `# TODO` or `pass` or `...` in committed code
+- Max function length: 50 lines. Extract if longer.
+- Max arguments per function: 5. Use Pydantic model if more needed.
+- All public functions: Google-style docstring (Args, Returns, Raises)
+
+## PYDANTIC V2 PATTERNS — USE THESE
+```python
+# CORRECT
+obj = MyModel.model_validate(data)
+serialized = obj.model_dump()
+serialized_json = obj.model_dump_json()
+
+# WRONG — do not use
+obj = MyModel.parse_obj(data)       # V1 API
+serialized = obj.dict()            # V1 API  
+serialized = obj.json()            # V1 API
+```
+
+## GOOGLE GENAI — USE THESE PATTERNS
+```python
+# CORRECT: Structured output with schema enforcement
+response = client.models.generate_content(
+    model=settings.LLM_MODEL,
+    contents=prompt,
+    config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=MyPydanticModel,
+        temperature=0.0,
+    )
+)
+
+# CORRECT: Batch embeddings (max 64 per call)
+result = client.models.embed_content(
+    model=settings.EMBEDDING_MODEL,
+    contents=texts[:64],
+)
+
+# WRONG: Never loop over individual texts for embedding
+for text in texts:
+    embed = client.models.embed_content(model=..., contents=text)
+```
+
+## DUCKDB — USE THESE PATTERNS
+```python
+# CORRECT: Parameterized query
+conn.execute("SELECT * FROM addresses WHERE pincode = ?", [pincode])
+
+# WRONG: f-string SQL
+conn.execute(f"SELECT * FROM addresses WHERE pincode = '{pincode}'")
+```
+
+## TESTING
+- Unit tests: mock ALL external APIs (Gemini, OpenAI, DuckDB can use in-memory)
+- Integration tests: use FastAPI TestClient, DuckDB in-memory
+- NO real network calls in unit tests
+- NO hardcoded absolute file paths — use pathlib.Path(__file__).parent
+- Every new engine function MUST have a corresponding test before PR
+
+## FILE NAMING
+- Python files: snake_case.py
+- Test files: test_{module_name}.py (mirrors app/ structure in tests/)
+- No abbreviations in new file names (write `lexical_engine.py` not `lex.py`)
+
+## GIT & COMMITS
+- No .env files committed
+- No *.db or *.duckdb files committed
+- No API keys in any committed file
+- Commit format: `<type>(<scope>): <description>` (see CONTRIBUTING.md)
+
+## IMPORTS ORDER (ruff enforced)
+1. `from __future__ import annotations`
+2. stdlib imports
+3. third-party imports (fastapi, pydantic, duckdb, google-genai)
+4. local imports (app.models, app.core, app.engines)
+
+## DO NOT TOUCH
+- CLAUDE.md, GEMINI.md, AGENTS.md, CONTEXT.md without explicit architect approval
+- Confidence thresholds in config.py without benchmark evidence
+- The 4-tier cascade flow in hybrid_router.py without architect review
+
+## WHEN IN DOUBT
+Read CONTEXT.md Section 7 "Key Algorithmic Invariants". If still unclear, halt and ask for human review rather than guessing. A wrong SAP Premise ID causes billing errors in production.
