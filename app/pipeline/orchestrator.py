@@ -165,6 +165,8 @@ class SearchOrchestrator:
         t2_matches = semantic_search(slots, candidate_pool, top_k=query.max_results)
         tiers_invoked.append(2)
 
+        fused_matches: list[CandidateMatch] = []
+
         # If Tier 2 returns empty (strict number filter found 0 candidates in DB),
         # the premise/flat combination does not exist in the search index.
         # Skip fusion — proceed directly to Tier 3 for LLM cross-encoder resolution.
