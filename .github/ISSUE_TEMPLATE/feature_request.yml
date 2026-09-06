@@ -1,0 +1,19 @@
+name: Feature Request
+description: Propose a new resolution strategy, heuristic, or performance improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: Is your feature request related to a specific address formatting pattern or limitation?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed algorithmic or structural improvement.
+    validations:
+      required: true

@@ -1,0 +1,26 @@
+name: Bug Report
+description: File a bug report for address resolution or matching failures
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for filing a bug report!
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the matching anomaly or failure.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Inputs & Expected Resolution
+      description: Provide the input address strings and what address ID was expected vs returned.
+      placeholder: |
+        Query: "123 Main St Ste 400, Springfield"
+        Expected Match: ADDR-9921
+        Actual Match: None / Incorrect Match
+    validations:
+      required: true
